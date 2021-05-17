@@ -31,19 +31,12 @@
 
 
 import FileProvider
-import Combine
-import BlinkFiles
-import FileProvider
 
 class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
-  var enumeratedItemIdentifier: NSFileProviderItemIdentifier
-  var root = Local()
-  let path: String
-//  let domain: String
+  var blinkUtility: BlinkUtility
 
-  init(enumeratedItemIdentifier: NSFileProviderItemIdentifier, path: String) {
-    self.enumeratedItemIdentifier = enumeratedItemIdentifier
-    self.path = path // this cannot be hardcoded!!
+  init(enumeratedItemIdentifier: NSFileProviderItemIdentifier, path: String, domain: NSFileProviderDomain) {
+    self.blinkUtility = BlinkUtility(enumeratedItemIdentifier: enumeratedItemIdentifier, domain: domain)
     super.init()
   }
   
@@ -65,36 +58,7 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
      - inform the observer that you are finished with this page
      */
     
-    switch enumeratedItemIdentifier {
-    case .rootContainer:
-      blinkLocalWorker(observer: observer)
-      return
-    case .workingSet:
-      return
-    default:
-      blinkLocalWorker(observer: observer)
-      break
-    }
-  }
-
-  private func blinkLocalWorker(observer: NSFileProviderEnumerationObserver) {
-    var c: AnyCancellable? = nil
-    c = root.walkTo(path).flatMap { $0.directoryFilesAndAttributes() }
-      .sink(receiveCompletion: { _ in
-      // TODO Pass errors to the other side
-      // fatalError
-        c = nil
-    }, receiveValue: { attrs in
-      let curr = self.root.current
-      let items = attrs.map { blinkAttr -> FileProviderItem in
-        let ref = BlinkItemReference(rootPath: curr,
-                                     attributes: blinkAttr)
-        return FileProviderItem(reference: ref)
-      }
-      observer.didEnumerate(items)
-      observer.finishEnumerating(upTo: nil)
-
-      })
+    blinkUtility.enumerateLocalItems(for: observer, startingAt: page)
   }
 
   func enumerateChanges(for observer: NSFileProviderChangeObserver, from anchor: NSFileProviderSyncAnchor) {

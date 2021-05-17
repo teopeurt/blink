@@ -45,7 +45,6 @@ class FileProviderExtension: NSFileProviderExtension {
 
   // MARK: - BlinkItem Entry : DB-GET query (using uniq NSFileProviderItemIdentifier ID)
   override func item(for identifier: NSFileProviderItemIdentifier) throws -> NSFileProviderItem {
-    
     guard let reference = BlinkItemReference(itemIdentifier: identifier) else {      throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: identifier)
     }
     
@@ -169,6 +168,7 @@ class FileProviderExtension: NSFileProviderExtension {
   // MARK: - Enumeration
   
   override func enumerator(for containerItemIdentifier: NSFileProviderItemIdentifier) throws -> NSFileProviderEnumerator {
+
     let maybeEnumerator: NSFileProviderEnumerator? = nil
     guard let domain = self.domain else {
       throw "No domain received. We need a domain to set a root for the provider."
@@ -178,7 +178,7 @@ class FileProviderExtension: NSFileProviderExtension {
       // TODO: instantiate an enumerator for the container root
       // We should probably have a factory to create the proper translator, and
       // then pass that to the enumerator.
-      return FileProviderEnumerator(enumeratedItemIdentifier: containerItemIdentifier, path: "/")
+      return FileProviderEnumerator(enumeratedItemIdentifier: containerItemIdentifier, path: "/", domain: domain)
       // /Users
     }
     //        else if (containerItemIdentifier == NSFileProviderItemIdentifier.workingSet) {
@@ -199,7 +199,7 @@ class FileProviderExtension: NSFileProviderExtension {
             return enumerator
       }
       
-      return FileProviderEnumerator(enumeratedItemIdentifier: containerItemIdentifier, path: ref.path)
+      return FileProviderEnumerator(enumeratedItemIdentifier: containerItemIdentifier, path: ref.path, domain: domain)
       
     }
   }
