@@ -37,9 +37,31 @@ extension String: Error {}
 class FileProviderExtension: NSFileProviderExtension {
   
   var fileManager = FileManager()
-  
+  var kvoDomainToken: NSKeyValueObservation?
+
   override init() {
+    
     super.init()
+    
+    // TODO: App Group Config
+    
+    // TODO: Translator config
+    
+    // Domain changes listener
+    self.observe()
+  }
+  
+  func observe(){
+    kvoDomainToken = self.observe(\.domain, options: .new) { (self, change) in
+      guard let domain = change.newValue else { return }
+      
+      // TODO: Act on Domain changes
+      print("New domain is: \(String(describing: domain))")
+    }
+  }
+  
+  deinit {
+    kvoDomainToken?.invalidate()
   }
   
 
