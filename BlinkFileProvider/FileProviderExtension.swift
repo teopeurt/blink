@@ -39,6 +39,7 @@ extension String: Error {}
 enum BlinkFilesProtocol: String {
   case ssh = "ssh"
   case local = "local"
+  case sftp = "sftp"
 }
 
 class FileTranslatorPool {
@@ -85,7 +86,21 @@ class FileProviderExtension: NSFileProviderExtension {
 
   // MARK: - BlinkItem Entry : DB-GET query (using uniq NSFileProviderItemIdentifier ID)
   override func item(for identifier: NSFileProviderItemIdentifier) throws -> NSFileProviderItem {
-    guard let reference = BlinkItemReference(itemIdentifier: identifier) else {      throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: identifier)
+    
+    let _path = self.domain!.pathRelativeToDocumentStorage
+    
+    let components = _path.split(separator: ":")
+    //  TODO At least two components
+    let p = BlinkFilesProtocol(rawValue: String(components[0]))
+    let pathAtFiles: String
+    if components.count == 2 {
+      pathAtFiles = String(components[1])
+    } else {
+      pathAtFiles = String(components[2])
+    }
+    
+    
+    guard let reference = BlinkItemReference(itemIdentifier: identifier, rootPath: pathAtFiles) else {      throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: identifier)
     }
     
     return FileProviderItem(reference: reference)
@@ -214,12 +229,26 @@ class FileProviderExtension: NSFileProviderExtension {
     guard let domain = self.domain else {
       throw "No domain received. We need a domain to set a root for the provider."
     }
+    
+    let _path = domain.pathRelativeToDocumentStorage
+    
+    let components = _path.split(separator: ":")
+    //  TODO At least two components
+    let p = BlinkFilesProtocol(rawValue: String(components[0]))
+    let pathAtFiles: String
+    if components.count == 2 {
+      pathAtFiles = String(components[1])
+    } else {
+      pathAtFiles = String(components[2])
+    }
+    
+    
 
     if (containerItemIdentifier == NSFileProviderItemIdentifier.rootContainer) {
       // TODO: instantiate an enumerator for the container root
       // We should probably have a factory to create the proper translator, and
       // then pass that to the enumerator.
-      return FileProviderEnumerator(enumeratedItemIdentifier: containerItemIdentifier, path: "/", domain: domain)
+      return FileProviderEnumerator(enumeratedItemIdentifier: containerItemIdentifier, path: nil, domain: domain, rootPath: pathAtFiles)
       // /Users
     }
     //        else if (containerItemIdentifier == NSFileProviderItemIdentifier.workingSet) {
@@ -230,7 +259,7 @@ class FileProviderExtension: NSFileProviderExtension {
       // - for a directory, instantiate an enumerator of its subitems
       // - for a file, instantiate an enumerator that observes changes to the file
       guard
-        let ref = BlinkItemReference(itemIdentifier: containerItemIdentifier),
+        let ref = BlinkItemReference(itemIdentifier: containerItemIdentifier, rootPath: pathAtFiles),
         ref.isDirectory
         else {
             guard let enumerator = maybeEnumerator else {
@@ -239,7 +268,7 @@ class FileProviderExtension: NSFileProviderExtension {
             return enumerator
       }
       
-      return FileProviderEnumerator(enumeratedItemIdentifier: containerItemIdentifier, path: ref.path, domain: domain)
+      return FileProviderEnumerator(enumeratedItemIdentifier: containerItemIdentifier, path: ref.path, domain: domain, rootPath: pathAtFiles)
       
     }
   }

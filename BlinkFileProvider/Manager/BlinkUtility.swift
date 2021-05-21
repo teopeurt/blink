@@ -96,89 +96,89 @@ class BlinkUtility {
      */
     
     
-    switch enumeratedItemIdentifier {
-    case .rootContainer:
-
-      if (proto == .localProtocol){
-        blinkLocalWorker(observer: observer)
-      }
-      DispatchQueue.main.async {
-        if (self.proto == .sshProtocol){
-          self.blinkSSHWorker(observer: observer)
-        }
-      }
-      
-      return
-    case .workingSet:
-      return
-    default:
-      if (proto == .localProtocol){
-        blinkLocalWorker(observer: observer)
-      }
-      DispatchQueue.main.async {
-        if (self.proto == .sshProtocol){
-        self.blinkSSHWorker(observer: observer)
-      }
-      }
-      break
-    }
+//    switch enumeratedItemIdentifier {
+//    case .rootContainer:
+//
+//      if (proto == .localProtocol){
+//        blinkLocalWorker(observer: observer)
+//      }
+//      DispatchQueue.main.async {
+//        if (self.proto == .sshProtocol){
+//          self.blinkSSHWorker(observer: observer)
+//        }
+//      }
+//      
+//      return
+//    case .workingSet:
+//      return
+//    default:
+//      if (proto == .localProtocol){
+//        blinkLocalWorker(observer: observer)
+//      }
+//      DispatchQueue.main.async {
+//        if (self.proto == .sshProtocol){
+//        self.blinkSSHWorker(observer: observer)
+//      }
+//      }
+//      break
+//    }
   }
 
-  private func blinkLocalWorker(observer: NSFileProviderEnumerationObserver) {
-    var c: AnyCancellable? = nil
-    c = localBlink.walkTo(path).flatMap { $0.directoryFilesAndAttributes() }
-      .sink(receiveCompletion: { _ in
-        c = nil
-    }, receiveValue: { attrs in
-      let curr = self.localBlink.current
-      debugPrint("local blink current")
-      debugPrint(curr)
-      let items = attrs.map { blinkAttr -> FileProviderItem in
-        let ref = BlinkItemReference(rootPath: curr,
-                                     attributes: blinkAttr)
-        return FileProviderItem(reference: ref)
-      }
-      observer.didEnumerate(items)
-      observer.finishEnumerating(upTo: nil)
+//  private func blinkLocalWorker(observer: NSFileProviderEnumerationObserver) {
+//    var c: AnyCancellable? = nil
+//    c = localBlink.walkTo(path).flatMap { $0.directoryFilesAndAttributes() }
+//      .sink(receiveCompletion: { _ in
+//        c = nil
+//    }, receiveValue: { attrs in
+//      let curr = self.localBlink.current
+//      debugPrint("local blink current")
+//      debugPrint(curr)
+//      let items = attrs.map { blinkAttr -> FileProviderItem in
+//        let ref = BlinkItemReference(rootPath: curr,
+//                                     attributes: blinkAttr)
+//        return FileProviderItem(reference: ref)
+//      }
+//      observer.didEnumerate(items)
+//      observer.finishEnumerating(upTo: nil)
+//
+//      })
+//  }
 
-      })
-  }
-
-  private func blinkSSHWorker(observer: NSFileProviderEnumerationObserver) {
-    var connection: SSHClient?
-    var sftp: SFTPClient?
-    
-    var c: AnyCancellable? = nil
-    c = SSHClient.dial("localhost", with: SSHClientConfig(user: "carloscabanero", authMethods: [AuthPassword(with: "asdfzxcv")], loggingVerbosity: .debug))
-      .print("Dialing...")
-      .flatMap() { conn -> AnyPublisher<SFTPClient, Error> in
-        connection = conn
-        return conn.requestSFTP()
-      }.flatMap() { client -> AnyPublisher<Translator, Error> in
-          sftp = client
-          return client.walkTo(self.path)
-      }
-      .flatMap { $0.directoryFilesAndAttributes() }
-      .sink(receiveCompletion: { completion in
-        c  = nil
-        connection = nil
-        switch completion {
-        case .finished:
-          print("finished")
-        case .failure(let error):
-          print("failure")
-        }
-      }, receiveValue: { attrs in
-        let curr = sftp!.current
-        let items = attrs.map { blinkAttr -> FileProviderItem in
-          let ref = BlinkItemReference(rootPath: curr,
-                                       attributes: blinkAttr)
-          return FileProviderItem(reference: ref)
-        }
-        observer.didEnumerate(items)
-        observer.finishEnumerating(upTo: nil)
-      })
-  }
+//  private func blinkSSHWorker(observer: NSFileProviderEnumerationObserver) {
+//    var connection: SSHClient?
+//    var sftp: SFTPClient?
+//
+//    var c: AnyCancellable? = nil
+//    c = SSHClient.dial("localhost", with: SSHClientConfig(user: "carloscabanero", authMethods: [AuthPassword(with: "asdfzxcv")], loggingVerbosity: .debug))
+//      .print("Dialing...")
+//      .flatMap() { conn -> AnyPublisher<SFTPClient, Error> in
+//        connection = conn
+//        return conn.requestSFTP()
+//      }.flatMap() { client -> AnyPublisher<Translator, Error> in
+//          sftp = client
+//          return client.walkTo(self.path)
+//      }
+//      .flatMap { $0.directoryFilesAndAttributes() }
+//      .sink(receiveCompletion: { completion in
+//        c  = nil
+//        connection = nil
+//        switch completion {
+//        case .finished:
+//          print("finished")
+//        case .failure(let error):
+//          print("failure")
+//        }
+//      }, receiveValue: { attrs in
+//        let curr = sftp!.current
+//        let items = attrs.map { blinkAttr -> FileProviderItem in
+//          let ref = BlinkItemReference(rootPath: curr,
+//                                       attributes: blinkAttr)
+//          return FileProviderItem(reference: ref)
+//        }
+//        observer.didEnumerate(items)
+//        observer.finishEnumerating(upTo: nil)
+//      })
+//  }
 
 }
 

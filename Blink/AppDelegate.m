@@ -122,7 +122,7 @@ void __setupProcessEnv() {
 //#if !TARGET_OS_MACCATALYST
   
   // protocol://server/uuid/
-  
+
 //  [NSFileProviderManager removeAllDomainsWithCompletionHandler:^(NSError * _Nullable error) {
 //    //nul
 //  }];
@@ -139,23 +139,32 @@ void __setupProcessEnv() {
 //                                                                      displayName: @"ssh"
 //                                                    pathRelativeToDocumentStorage: uuidString];
 
-  
-  NSUUID *uuid2 = [NSUUID UUID];
-  NSString *uuid2String = @"uuid2";
-  NSString *local = @"local";
-  NSString *domainID2 = [NSString stringWithFormat:@"%@", local, uuid2String];
+//
+//  NSUUID *uuid2 = [NSUUID UUID];
+//  NSString *uuid2String = @"uuid2";
+//  NSString *local = @"local";
+//  NSString *domainID2 = [NSString stringWithFormat:@"%@", local, uuid2String];
 
   NSFileProviderDomain *domainTwo = [[NSFileProviderDomain alloc] initWithIdentifier: NSFileProviderRootContainerItemIdentifier
-                                                                         displayName: @"SFTP"
+                                                                         displayName: @"usr"
                                      // The path of the domain's subdirectory relative to the file provider's shared container. "<ssh:host:path>/asdfasdf/"
-                                                       pathRelativeToDocumentStorage: @"s3:spaces.digitalocean.com:/"];
+                                                       pathRelativeToDocumentStorage: @"local:/usr"];
+  
+  NSFileProviderDomain *domainThree = [[NSFileProviderDomain alloc] initWithIdentifier: NSFileProviderRootContainerItemIdentifier
+                                                                         displayName: @"bin"
+                                     // The path of the domain's subdirectory relative to the file provider's shared container. "<ssh:host:path>/asdfasdf/"
+                                                       pathRelativeToDocumentStorage: @"local:/bin"];
 
 //  [NSFileProviderManager addDomain:domainOne completionHandler:^(NSError * _Nullable error) {
 //    NSLog(@"domainID1 %@ one error %@", domainID1, error);
 //  }];
 
   [NSFileProviderManager addDomain:domainTwo completionHandler:^(NSError * _Nullable error) {
-    NSLog(@"domainID2 %@ two error %@", domainID2, error);
+//    NSLog(@"domainID2 %@ two error %@", domainID2, error);
+  }];
+  
+  [NSFileProviderManager addDomain:domainThree completionHandler:^(NSError * _Nullable error) {
+//    NSLog(@"domainID2 %@ two error %@", domainID2, error);
   }];
 
 

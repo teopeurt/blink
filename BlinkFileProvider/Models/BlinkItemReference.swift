@@ -39,31 +39,35 @@ import BlinkFiles
 struct BlinkItemReference {
   private let urlRepresentation: URL
   var attributes: BlinkFiles.FileAttributes? = nil
+  var rootPath: String
   
   // TODO: Blink Translator Reference for real root path
   private var isRoot: Bool {
-    return urlRepresentation.path == "/"
+    return urlRepresentation.path == self.rootPath
   }
   
   // No Blink File?
-  private init(urlRepresentation: URL) {
+  private init(urlRepresentation: URL, rootPath: String) {
     self.urlRepresentation = urlRepresentation
+    self.rootPath = rootPath
   }
   
-  private init(urlRepresentation: URL, attributes: BlinkFiles.FileAttributes){
-    self.init(urlRepresentation: urlRepresentation)
+  private init(urlRepresentation: URL, attributes: BlinkFiles.FileAttributes, rootPath: String){
+    self.init(urlRepresentation: urlRepresentation, rootPath: rootPath)
     self.attributes = attributes
+    self.rootPath = rootPath
   }
   
   // MARK: - Enumerator Entry Point:
   // objective is to convert to URL representation
   // file://path_to_domain/path_to_file_encoded/name
   // a Database model -> domain://root/path/name[.extension]
-  init(rootPath: String, attributes: BlinkFiles.FileAttributes) {
+  init( rootpath: String, relativePath: String, attributes: BlinkFiles.FileAttributes) {
+  
     let type = attributes[.type] as? FileAttributeType
     let isAttrDirectory = type == .typeDirectory
     let filename = attributes[.name] as! String
-    let nsRootPath = (rootPath as NSString).standardizingPath
+    let nsRootPath = (relativePath as NSString).standardizingPath
 
     let pathComponents = nsRootPath.components(separatedBy: "/").filter {
       !$0.isEmpty
@@ -80,7 +84,7 @@ struct BlinkItemReference {
       withAllowedCharacters: .urlPathAllowed
     ) ?? absolutePath
 
-    self.init(urlRepresentation: URL(string: "blinkDomainReference://\(absolutePath)")!, attributes: attributes)
+    self.init(urlRepresentation: URL(string: absolutePath)!, attributes: attributes, rootPath: rootpath)
   }
   
   // MARK: - DB Query Entry Point:
@@ -97,12 +101,12 @@ struct BlinkItemReference {
 
    For the other items, the URL representation is retrieved by converting the raw value of the identifier to base64-encoded data. The information in the URL comes from the network request that first enumerated the instance.
    */
-  init?(itemIdentifier: NSFileProviderItemIdentifier) {
+  init?(itemIdentifier: NSFileProviderItemIdentifier, rootPath: String) {
     
     // MARK: - Objective is to ???
     guard itemIdentifier != .rootContainer else {
       
-      self.init(urlRepresentation: URL(string: "blinkDomainReference:///")!)
+      self.init(urlRepresentation: URL(string: rootPath)!, rootPath: rootPath)
       return
       
     }
@@ -112,7 +116,7 @@ struct BlinkItemReference {
         return nil
     }
     
-    self.init(urlRepresentation: url)
+    self.init(urlRepresentation: url, rootPath: rootPath)
   }
 
 
@@ -168,6 +172,6 @@ struct BlinkItemReference {
     
     // convert between BlinkFile Attritubes and URL
     return BlinkItemReference(
-      urlRepresentation: urlRepresentation.deletingLastPathComponent())
+      urlRepresentation: urlRepresentation.deletingLastPathComponent(), rootPath: self.rootPath)
   }
 }

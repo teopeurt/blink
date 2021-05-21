@@ -37,15 +37,28 @@ import Combine
 class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
   let translator: AnyPublisher<Translator, Error>
   var cancellableBag: Set<AnyCancellable> = []
+  var rootPath: String
   //var translatorPub: AnyPublisher<Translator, Error>
 
-  init(enumeratedItemIdentifier: NSFileProviderItemIdentifier, path: String, domain: NSFileProviderDomain) {
+  init(enumeratedItemIdentifier: NSFileProviderItemIdentifier,
+       path: String?,
+       domain: NSFileProviderDomain,
+       rootPath: String) {
+    
+    self.rootPath = rootPath
+
     self.translator = FileTranslatorPool.translator(for: domain.pathRelativeToDocumentStorage)
-      .flatMap {
-        $0.cloneWalkTo(path)
+      .flatMap { t -> AnyPublisher<Translator, Error> in
+        
+        if let path = path {
+          return t.cloneWalkTo(path)
+        } else {
+          return Just(t.clone()).mapError {$0 as Error}.eraseToAnyPublisher()
+        }
       }.eraseToAnyPublisher()
     //self.blinkUtility = BlinkUtility(enumeratedItemIdentifier: enumeratedItemIdentifier, domain: domain)
     super.init()
+    
   }
   
   func invalidate() {
@@ -83,7 +96,8 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
     }, receiveValue: { attrs in
       debugPrint("local blink current")
       let items = attrs.map { blinkAttr -> FileProviderItem in
-        let ref = BlinkItemReference(rootPath: current,
+        let ref = BlinkItemReference(rootpath: self.rootPath,
+                                     relativePath: current,
                                      attributes: blinkAttr)
         return FileProviderItem(reference: ref)
       }
