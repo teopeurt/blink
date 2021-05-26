@@ -123,9 +123,9 @@ void __setupProcessEnv() {
   
   // protocol://server/uuid/
 
-//  [NSFileProviderManager removeAllDomainsWithCompletionHandler:^(NSError * _Nullable error) {
-//    //nul
-//  }];
+  [NSFileProviderManager removeAllDomainsWithCompletionHandler:^(NSError * _Nullable error) {
+    //nul
+  }];
 
   // TODO: Not used
 //  NSUUID *uuid = [NSUUID UUID];
@@ -145,15 +145,22 @@ void __setupProcessEnv() {
 //  NSString *local = @"local";
 //  NSString *domainID2 = [NSString stringWithFormat:@"%@", local, uuid2String];
 
-  NSFileProviderDomain *domainTwo = [[NSFileProviderDomain alloc] initWithIdentifier: NSFileProviderRootContainerItemIdentifier
+  NSString *rootPath = [NSString stringWithFormat:@"%@:%@", @"local", @"/"];
+  NSData *rootData = [rootPath dataUsingEncoding:NSUTF8StringEncoding];
+  NSString *encodedRootPath = [rootData base64EncodedStringWithOptions:NO];
+  
+  NSFileProviderDomain *domainTwo = [[NSFileProviderDomain alloc] initWithIdentifier: encodedRootPath
+                                                                         displayName: @"/"
+                                     // The path of the domain's subdirectory relative to the file provider's shared container. "<ssh:host:path>/asdfasdf/"
+                                                       pathRelativeToDocumentStorage: @"/"];
+  
+  NSString *rootPathDomainThree = [NSString stringWithFormat:@"%@:%@", @"local", @"/usr"];
+  NSData *rootDataDomainThree = [rootPathDomainThree dataUsingEncoding:NSUTF8StringEncoding];
+  NSString *encodedRootPathDomainThree = [rootDataDomainThree base64EncodedStringWithOptions:NO];
+  NSFileProviderDomain *domainThree = [[NSFileProviderDomain alloc] initWithIdentifier: encodedRootPathDomainThree
                                                                          displayName: @"usr"
                                      // The path of the domain's subdirectory relative to the file provider's shared container. "<ssh:host:path>/asdfasdf/"
-                                                       pathRelativeToDocumentStorage: @"local:/usr"];
-  
-  NSFileProviderDomain *domainThree = [[NSFileProviderDomain alloc] initWithIdentifier: NSFileProviderRootContainerItemIdentifier
-                                                                         displayName: @"bin"
-                                     // The path of the domain's subdirectory relative to the file provider's shared container. "<ssh:host:path>/asdfasdf/"
-                                                       pathRelativeToDocumentStorage: @"local:/bin"];
+                                                       pathRelativeToDocumentStorage: @"/usr"];
 
 //  [NSFileProviderManager addDomain:domainOne completionHandler:^(NSError * _Nullable error) {
 //    NSLog(@"domainID1 %@ one error %@", domainID1, error);

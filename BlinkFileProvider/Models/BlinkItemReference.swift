@@ -36,125 +36,81 @@ import MobileCoreServices
 
 import BlinkFiles
 
+
+// Goal is to bridge the Identifier to the underlying BlinkFiles system, and to offer
+// Representations the item.
 struct BlinkItemReference {
-  private let urlRepresentation: URL
-  var attributes: BlinkFiles.FileAttributes? = nil
-  var rootPath: String
-  
-  // TODO: Blink Translator Reference for real root path
-  private var isRoot: Bool {
-    return urlRepresentation.path == self.rootPath
-  }
+  //private let encodedRootPath: String
+  // TODO We could also work with a  URL that is not the URL representation,
+  // but the URL Identifier. This way we would not have to transform from NSString all the time.
+  private let path: String
+  private let encodedRootPath: String
+  //private let urlRepresentation: URL
+  var attributes: BlinkFiles.FileAttributes
   
   // No Blink File?
-  private init(urlRepresentation: URL, rootPath: String) {
-    self.urlRepresentation = urlRepresentation
-    self.rootPath = rootPath
-  }
-  
-  private init(urlRepresentation: URL, attributes: BlinkFiles.FileAttributes, rootPath: String){
-    self.init(urlRepresentation: urlRepresentation, rootPath: rootPath)
-    self.attributes = attributes
-    self.rootPath = rootPath
-  }
+//  private init(urlRepresentation: URL) {
+//    self.urlRepresentation = urlRepresentation
+//  }
+//
+//  private init(urlRepresentation: URL, attributes: BlinkFiles.FileAttributes){
+//    self.init(urlRepresentation: urlRepresentation)
+//    self.attributes = attributes
+//  }
   
   // MARK: - Enumerator Entry Point:
-  // objective is to convert to URL representation
-  // file://path_to_domain/path_to_file_encoded/name
-  // a Database model -> domain://root/path/name[.extension]
-  init( rootpath: String, relativePath: String, attributes: BlinkFiles.FileAttributes) {
-  
-    let type = attributes[.type] as? FileAttributeType
-    let isAttrDirectory = type == .typeDirectory
+  // Requires attributes. If you only have the Identifier, you need to go to the DB.
+  // Identifier format <encodedRootPath>/path/to/filename
+  init(parentItemIdentifier: NSFileProviderItemIdentifier,
+       attributes: BlinkFiles.FileAttributes) {
+    self.attributes = attributes
+
     let filename = attributes[.name] as! String
-    let nsRootPath = (relativePath as NSString).standardizingPath
 
-    let pathComponents = nsRootPath.components(separatedBy: "/").filter {
-      !$0.isEmpty
-    } + [filename]
-    
-    var absolutePath = "/" + pathComponents.joined(separator: "/")
-
-    if isAttrDirectory {
-      absolutePath.append("/")
+    self.encodedRootPath = (parentItemIdentifier.rawValue as NSString).pathComponents[0]
+    var path = (parentItemIdentifier.rawValue)
+    path.removeFirst(encodedRootPath.count)
+    if path.isEmpty {
+      path = "/"
     }
-
-    //take out spaces and characters
-    absolutePath = absolutePath.addingPercentEncoding(
-      withAllowedCharacters: .urlPathAllowed
-    ) ?? absolutePath
-
-    self.init(urlRepresentation: URL(string: absolutePath)!, attributes: attributes, rootPath: rootpath)
+    self.path = (path as NSString).appendingPathComponent(filename)
   }
   
   // MARK: - DB Query Entry Point:
-  // The URL needs to be below the container.
+  // TODO The URL needs to be below the container.
   // https://developer.apple.com/documentation/fileprovider/nsfileproviderextension/1623481-urlforitemwithpersistentidentifi?language=objc
   // https://developer.apple.com/documentation/fileprovider/nsfileprovidermanager/2879513-documentstorageurl?language=objc
-  //1.
-  /*
-   system provides the identifier passed to this method, and you return a FileProviderItem for that identifier.
-   
-   scheme blinkDomainReference://.
-   
-   You handle the root container identifier separately to ensure its URL path is properly set.
 
-   For the other items, the URL representation is retrieved by converting the raw value of the identifier to base64-encoded data. The information in the URL comes from the network request that first enumerated the instance.
-   */
-  init?(itemIdentifier: NSFileProviderItemIdentifier, rootPath: String) {
-    
-    // MARK: - Objective is to ???
-    guard itemIdentifier != .rootContainer else {
-      
-      self.init(urlRepresentation: URL(string: rootPath)!, rootPath: rootPath)
-      return
-      
-    }
-    
-    guard let data = Data(base64Encoded: itemIdentifier.rawValue),
-      let url = URL(dataRepresentation: data, relativeTo: nil) else {
-        return nil
-    }
-    
-    self.init(urlRepresentation: url, rootPath: rootPath)
+  var url: URL {
+    let data = self.path.data(using: .utf8)
+    let encodedPath = data!.base64EncodedString()
+    // TODO This should probably be relative to the application root container
+    return URL(fileURLWithPath:"\(encodedRootPath)/\(encodedPath)/\(filename)")
   }
-
-
+  
   var itemIdentifier: NSFileProviderItemIdentifier {
-    if isRoot {
-      return .rootContainer
-    } else {
       return NSFileProviderItemIdentifier(
-        rawValue: urlRepresentation.dataRepresentation.base64EncodedString()
+        rawValue: "\(encodedRootPath)\(path)"
       )
-    }
   }
 
   var isDirectory: Bool {
-    return urlRepresentation.hasDirectoryPath
-  }
-
-  var path: String {
-    return urlRepresentation.path
-  }
-
-  var containingDirectory: String {
-    return urlRepresentation.deletingLastPathComponent().path
+    return (attributes[.type] as? FileAttributeType) == .typeDirectory
   }
 
   var filename: String {
-    return urlRepresentation.lastPathComponent
+    return (path as NSString).lastPathComponent
   }
 
   var typeIdentifier: String {
-    guard let type = attributes?[.type] as? FileAttributeType else {
+    guard let type = attributes[.type] as? FileAttributeType else {
       return ""
     }
     if type == .typeDirectory {
       return kUTTypeFolder as String
     }
-     
-    let pathExtension = urlRepresentation.pathExtension
+
+    let pathExtension = (filename as NSString).pathExtension
     let unmanaged = UTTypeCreatePreferredIdentifierForTag(
       kUTTagClassFilenameExtension,
       pathExtension as CFString,
@@ -164,14 +120,15 @@ struct BlinkItemReference {
 
     return (retained as String?) ?? ""
   }
-
-  var parentReference: BlinkItemReference? {
-    guard !isRoot else {
-      return nil
+//
+  var parentReference: NSFileProviderItemIdentifier {
+    let parentPath = (path as NSString).deletingLastPathComponent
+    if parentPath == "/" {
+      return .rootContainer
+    } else {
+      return NSFileProviderItemIdentifier(
+        rawValue: "\(encodedRootPath)\(parentPath)"
+      )
     }
-    
-    // convert between BlinkFile Attritubes and URL
-    return BlinkItemReference(
-      urlRepresentation: urlRepresentation.deletingLastPathComponent(), rootPath: self.rootPath)
   }
 }
