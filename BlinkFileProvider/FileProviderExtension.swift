@@ -171,27 +171,33 @@ class FileProviderExtension: NSFileProviderExtension {
     /* TODO:
      This is one of the main entry points of the file provider. We need to check whether the file already exists on disk,
      whether we know of a more recent version of the file, and implement a policy for these cases. Pseudocode:
-     
-     if !fileOnDisk {
-     downloadRemoteFile()
-     callCompletion(downloadErrorOrNil)
-     } else if fileIsCurrent {
-     callCompletion(nil)
-     } else {
-     if localFileHasChanges {
-     // in this case, a version of the file is on disk, but we know of a more recent version
-     // we need to implement a strategy to resolve this conflict
-     moveLocalFileAside()
-     scheduleUploadOfLocalFile()
-     downloadRemoteFile()
-     callCompletion(downloadErrorOrNil)
-     } else {
-     downloadRemoteFile()
-     callCompletion(downloadErrorOrNil)
-     }
-     }
-     */
+   */
+//    if !fileOnDisk {
+//      downloadRemoteFile()
+//      callCompletion(downloadErrorOrNil)
+//    } else if fileIsCurrent {
+//      callCompletion(nil)
+//    } else {
+//      if localFileHasChanges {
+//        // in this case, a version of the file is on disk, but we know of a more recent version
+//        // we need to implement a strategy to resolve this conflict
+//        moveLocalFileAside()
+//        scheduleUploadOfLocalFile()
+//        downloadRemoteFile()
+//        callCompletion(downloadErrorOrNil)
+//      } else {
+//        downloadRemoteFile()
+//        callCompletion(downloadErrorOrNil)
+//      }
+//    }
+//
     
+    // 1 - From URL we get the identifier.
+    // 2 - From the identifier, we get the translator, and we can walk to the remote file.
+    // 3 - On local, the path is already the URL, so we walk to the local file path to provide there.
+    // 4 - Copy from one to the other, and call the completionHandler once done.
+    
+    // file://
     completionHandler(NSError(domain: NSCocoaErrorDomain, code: NSFeatureUnsupportedError, userInfo:[:]))
   }
   
