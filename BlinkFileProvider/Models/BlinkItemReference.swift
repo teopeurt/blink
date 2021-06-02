@@ -37,14 +37,81 @@ import MobileCoreServices
 import BlinkFiles
 
 
+struct BlinkItemIdentifier {
+  private let path: String
+  private let encodedRootPath: String
+  
+  // <encodedRootPath>/path/to, name = filename. -> <encodedRootPath>/path/to/filename
+  init(parentItemIdentifier: NSFileProviderItemIdentifier, filename: String) {
+    self.encodedRootPath = (parentItemIdentifier.rawValue as NSString).pathComponents[0]
+    var path = (parentItemIdentifier.rawValue)
+    path.removeFirst(encodedRootPath.count)
+    if path.isEmpty {
+      path = "/"
+    }
+    
+    self.path = (path as NSString).appendingPathComponent(filename)
+  }
+  
+  // <encodedRootPath>/path/to/filename
+  init(_ identifier: NSFileProviderItemIdentifier) {
+    self.encodedRootPath = (identifier.rawValue as NSString).pathComponents[0]
+    var path = (identifier.rawValue)
+    path.removeFirst(encodedRootPath.count)
+    if path.isEmpty {
+      path = "/"
+    }
+    self.path = path
+  }
+  
+  init(url: URL) {
+    let manager = NSFileProviderManager.default
+    let containerPath = manager.documentStorageURL.absoluteString
+    var path = url.absoluteString
+    path.removeFirst(containerPath.count + 1)
+    // file://<containerPath>/<encodedRootPath>/<encodedPath>/filename
+    let components = path.split(separator: "/")
+  }
+  
+  // <encodedRootPath>/<encodedPath>
+  var url: URL {
+    let data = self.path.data(using: .utf8)
+    let encodedPath = data!.base64EncodedString()
+    // TODO This should probably be relative to the application root container
+    return URL(fileURLWithPath:"\(encodedRootPath)/\(encodedPath)/\(filename)")
+  }
+  
+  var filename: String {
+    return (path as NSString).lastPathComponent
+  }
+  
+  var itemIdentifier: NSFileProviderItemIdentifier {
+      return NSFileProviderItemIdentifier(
+        rawValue: "\(encodedRootPath)\(path)"
+      )
+  }
+  
+  var parentReference: NSFileProviderItemIdentifier {
+    let parentPath = (path as NSString).deletingLastPathComponent
+    if parentPath == "/" {
+      return .rootContainer
+    } else {
+      return NSFileProviderItemIdentifier(
+        rawValue: "\(encodedRootPath)\(parentPath)"
+      )
+    }
+  }
+}
+
 // Goal is to bridge the Identifier to the underlying BlinkFiles system, and to offer
 // Representations the item.
 struct BlinkItemReference {
   //private let encodedRootPath: String
   // TODO We could also work with a  URL that is not the URL representation,
   // but the URL Identifier. This way we would not have to transform from NSString all the time.
-  private let path: String
-  private let encodedRootPath: String
+  private let identifier: BlinkItemIdentifier
+//  private let path: String
+//  private let encodedRootPath: String
   //private let urlRepresentation: URL
   var attributes: BlinkFiles.FileAttributes
   
@@ -60,20 +127,14 @@ struct BlinkItemReference {
   
   // MARK: - Enumerator Entry Point:
   // Requires attributes. If you only have the Identifier, you need to go to the DB.
-  // Identifier format <encodedRootPath>/path/to/filename
+  // Identifier format <encodedRootPath>/path/to/more/components/filename
   init(parentItemIdentifier: NSFileProviderItemIdentifier,
        attributes: BlinkFiles.FileAttributes) {
     self.attributes = attributes
 
     let filename = attributes[.name] as! String
 
-    self.encodedRootPath = (parentItemIdentifier.rawValue as NSString).pathComponents[0]
-    var path = (parentItemIdentifier.rawValue)
-    path.removeFirst(encodedRootPath.count)
-    if path.isEmpty {
-      path = "/"
-    }
-    self.path = (path as NSString).appendingPathComponent(filename)
+    self.identifier = BlinkItemIdentifier(parentItemIdentifier: parentItemIdentifier, filename: filename)
   }
   
   // MARK: - DB Query Entry Point:
@@ -82,16 +143,11 @@ struct BlinkItemReference {
   // https://developer.apple.com/documentation/fileprovider/nsfileprovidermanager/2879513-documentstorageurl?language=objc
 
   var url: URL {
-    let data = self.path.data(using: .utf8)
-    let encodedPath = data!.base64EncodedString()
-    // TODO This should probably be relative to the application root container
-    return URL(fileURLWithPath:"\(encodedRootPath)/\(encodedPath)/\(filename)")
+    return identifier.url
   }
   
   var itemIdentifier: NSFileProviderItemIdentifier {
-      return NSFileProviderItemIdentifier(
-        rawValue: "\(encodedRootPath)\(path)"
-      )
+    return identifier.itemIdentifier
   }
 
   var isDirectory: Bool {
@@ -99,7 +155,7 @@ struct BlinkItemReference {
   }
 
   var filename: String {
-    return (path as NSString).lastPathComponent
+    return identifier.filename
   }
 
   var typeIdentifier: String {
@@ -120,15 +176,8 @@ struct BlinkItemReference {
 
     return (retained as String?) ?? ""
   }
-//
+
   var parentReference: NSFileProviderItemIdentifier {
-    let parentPath = (path as NSString).deletingLastPathComponent
-    if parentPath == "/" {
-      return .rootContainer
-    } else {
-      return NSFileProviderItemIdentifier(
-        rawValue: "\(encodedRootPath)\(parentPath)"
-      )
-    }
+    return identifier.parentReference
   }
 }
