@@ -34,6 +34,7 @@ import FileProvider
 import BlinkFiles
 import Combine
 
+// TODO Provide proper error subclassing. BlinkFilesProviderError
 extension String: Error {}
 
 enum BlinkFilesProtocol: String {
@@ -45,13 +46,20 @@ enum BlinkFilesProtocol: String {
 class FileTranslatorPool {
   static let shared = FileTranslatorPool()
   private var translators: [String: AnyPublisher<Translator, Error>] = [:]
+  private var references: [String: BlinkItemReference] = [:]
   
   private init() {}
   
-  static func translator(for path: String) -> AnyPublisher<Translator, Error> {
-    // path: ssh:host:root_folder
-    let components = path.split(separator: ":")
-    //  TODO At least two components
+  static func translator(for encodedRootPath: String) -> AnyPublisher<Translator, Error> {
+    guard let rootData = Data(base64Encoded: encodedRootPath),
+          let rootPath = String(data: rootData, encoding: .utf8) else {
+      return Fail(error: "Wrong encoded identifier for Translator").eraseToAnyPublisher()
+    }
+    
+    // rootPath: ssh:host:root_folder
+    let components = rootPath.split(separator: ":")
+    
+    // TODO At least two components. Tweak for sftp
     let p = BlinkFilesProtocol(rawValue: String(components[0]))
     let pathAtFiles: String
     if components.count == 2 {
@@ -60,18 +68,26 @@ class FileTranslatorPool {
       pathAtFiles = String(components[2])
     }
     
-    if let translator = shared.translators[path] {
+    if let translator = shared.translators[encodedRootPath] {
       return translator
     }
     
     switch p {
     case .local:
       let translatorPub = Local().walkTo(pathAtFiles)
-      shared.translators[path] = translatorPub
+      shared.translators[encodedRootPath] = translatorPub
       return translatorPub
     default:
       return Fail(error: "Not implemented").eraseToAnyPublisher()
     }
+  }
+  
+  static func store(reference: BlinkItemReference) {
+    shared.references[reference.itemIdentifier.rawValue] = reference
+  }
+  
+  static func reference(identifier: NSFileProviderItemIdentifier) -> BlinkItemReference? {
+    shared.references[identifier.rawValue]
   }
 }
 
@@ -82,28 +98,31 @@ class FileProviderExtension: NSFileProviderExtension {
   override init() {
     super.init()
   }
-  
 
   // MARK: - BlinkItem Entry : DB-GET query (using uniq NSFileProviderItemIdentifier ID)
   override func item(for identifier: NSFileProviderItemIdentifier) throws -> NSFileProviderItem {
+    print("ITEM \(identifier.rawValue) REQUESTED")
     
-    let _path = self.domain!.pathRelativeToDocumentStorage
-    
-    let components = _path.split(separator: ":")
     //  TODO At least two components
-    let p = BlinkFilesProtocol(rawValue: String(components[0]))
-    let pathAtFiles: String
-    if components.count == 2 {
-      pathAtFiles = String(components[1])
-    } else {
-      pathAtFiles = String(components[2])
-    }
+//    let p = BlinkFilesProtocol(rawValue: String(components[0]))
+//    let pathAtFiles: String
+//    if components.count == 2 {
+//      pathAtFiles = String(components[1])
+//    } else {
+//      pathAtFiles = String(components[2])
+//    }
     
-    
-    guard let reference = BlinkItemReference(itemIdentifier: identifier, rootPath: pathAtFiles) else {      throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: identifier)
+    // TODO We have no attributes here, but they are necessary. Metadata will have to be
+    // stored somewhere else too.
+    guard let reference = FileTranslatorPool.reference(identifier: identifier) else {
+      throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: identifier)
     }
     
     return FileProviderItem(reference: reference)
+//    guard let reference = BlinkItemReference(itemIdentifier: identifier, rootPath: pathAtFiles) else {      throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: identifier)
+//    }
+//
+//    return FileProviderItem(reference: reference)
   }
   
   override func urlForItem(withPersistentIdentifier identifier: NSFileProviderItemIdentifier) -> URL? {
@@ -225,51 +244,17 @@ class FileProviderExtension: NSFileProviderExtension {
   override func enumerator(for containerItemIdentifier: NSFileProviderItemIdentifier) throws -> NSFileProviderEnumerator {
 
     let maybeEnumerator: NSFileProviderEnumerator? = nil
-    print("Called enumerator!!!")
+    print("Called enumerator for \(containerItemIdentifier.rawValue)")
+    
     guard let domain = self.domain else {
-      throw "No domain received. We need a domain to set a root for the provider."
+      throw "No domain received."
     }
-    
-    let _path = domain.pathRelativeToDocumentStorage
-    
-    let components = _path.split(separator: ":")
-    //  TODO At least two components
-    let p = BlinkFilesProtocol(rawValue: String(components[0]))
-    let pathAtFiles: String
-    if components.count == 2 {
-      pathAtFiles = String(components[1])
-    } else {
-      pathAtFiles = String(components[2])
-    }
-    
-    
 
-    if (containerItemIdentifier == NSFileProviderItemIdentifier.rootContainer) {
-      // TODO: instantiate an enumerator for the container root
-      // We should probably have a factory to create the proper translator, and
-      // then pass that to the enumerator.
-      return FileProviderEnumerator(enumeratedItemIdentifier: containerItemIdentifier, path: nil, domain: domain, rootPath: pathAtFiles)
-      // /Users
-    }
-    //        else if (containerItemIdentifier == NSFileProviderItemIdentifier.workingSet) {
-    //            // TODO: instantiate an enumerator for the working set
-    //        }
-    else {
-      // TODO: determine if the item is a directory or a file
-      // - for a directory, instantiate an enumerator of its subitems
-      // - for a file, instantiate an enumerator that observes changes to the file
-      guard
-        let ref = BlinkItemReference(itemIdentifier: containerItemIdentifier, rootPath: pathAtFiles),
-        ref.isDirectory
-        else {
-            guard let enumerator = maybeEnumerator else {
-              throw NSError(domain: NSCocoaErrorDomain, code: NSFeatureUnsupportedError, userInfo:[:])
-            }
-            return enumerator
-      }
-      
-      return FileProviderEnumerator(enumeratedItemIdentifier: containerItemIdentifier, path: ref.path, domain: domain, rootPath: pathAtFiles)
-      
+    if (containerItemIdentifier != NSFileProviderItemIdentifier.workingSet) {
+      return FileProviderEnumerator(enumeratedItemIdentifier: containerItemIdentifier, domain: domain)
+    } else {
+      // We may want to do an empty FileProviderEnumerator, because otherwise it will try to request it again and again.
+      throw NSError(domain: NSCocoaErrorDomain, code: NSFeatureUnsupportedError, userInfo:[:])
     }
   }
   

@@ -35,30 +35,42 @@ import Combine
 
 
 class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
+  let identifier: NSFileProviderItemIdentifier
   let translator: AnyPublisher<Translator, Error>
   var cancellableBag: Set<AnyCancellable> = []
-  var rootPath: String
   //var translatorPub: AnyPublisher<Translator, Error>
 
   init(enumeratedItemIdentifier: NSFileProviderItemIdentifier,
-       path: String?,
-       domain: NSFileProviderDomain,
-       rootPath: String) {
+       domain: NSFileProviderDomain) {
     
-    self.rootPath = rootPath
-
-    self.translator = FileTranslatorPool.translator(for: domain.pathRelativeToDocumentStorage)
+    // domainIdentifier <encodedRootIdentifier>
+    // TODO It would be nice if the Reference could take care of the details about
+    // what the structure is, and here we could just specify what we need.
+    // TODO Or maybe wrap that into a BlinkItemIdentifier
+    // Two cases, with or without a path below <encodedRootIdentifier>
+    // enumeratedItemIdentifier <encodedRootIdentifier>/path/to/wherever
+    if enumeratedItemIdentifier == .rootContainer {
+      self.identifier = NSFileProviderItemIdentifier(rawValue: domain.identifier.rawValue)
+    } else {
+      self.identifier = enumeratedItemIdentifier
+    }
+    var path = self.identifier.rawValue
+    path.removeFirst(domain.identifier.rawValue.count)
+    // The path is always relative to the encoded root. If we start with a slash, we remove it
+    // as otherwise the cloneWalk will go to the root of the filesystem.
+    if path.starts(with: "/") {
+      path.removeFirst()
+    }
+    self.translator = FileTranslatorPool.translator(for: domain.identifier.rawValue)
       .flatMap { t -> AnyPublisher<Translator, Error> in
-        
-        if let path = path {
+        if !path.isEmpty {
           return t.cloneWalkTo(path)
         } else {
           return Just(t.clone()).mapError {$0 as Error}.eraseToAnyPublisher()
         }
       }.eraseToAnyPublisher()
-    //self.blinkUtility = BlinkUtility(enumeratedItemIdentifier: enumeratedItemIdentifier, domain: domain)
+
     super.init()
-    
   }
   
   func invalidate() {
@@ -79,13 +91,7 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
      - inform the observer that you are finished with this page
      */
     
-    // blinkUtility.enumerateLocalItems(for: observer, startingAt: page)
-    var current: String!
-    print("enumeratingItems")
-    translator.print("Translator").flatMap { translator -> AnyPublisher<[FileAttributes], Error> in
-      current = translator.current
-      debugPrint(current)
-      return translator.directoryFilesAndAttributes()
+    translator.print("Translator").flatMap { $0.directoryFilesAndAttributes()
     }.sink(receiveCompletion: { completion in
       switch completion {
       case .failure(let error):
@@ -94,11 +100,11 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
         break
       }
     }, receiveValue: { attrs in
-      debugPrint("local blink current")
       let items = attrs.map { blinkAttr -> FileProviderItem in
-        let ref = BlinkItemReference(rootpath: self.rootPath,
-                                     relativePath: current,
+        let ref = BlinkItemReference(parentItemIdentifier: self.identifier,
                                      attributes: blinkAttr)
+        // Store the reference in the internal DB for later usage.
+        FileTranslatorPool.store(reference: ref)
         return FileProviderItem(reference: ref)
       }
       observer.didEnumerate(items)

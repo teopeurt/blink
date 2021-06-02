@@ -36,6 +36,7 @@ import MobileCoreServices
 
 import BlinkFiles
 
+
 final class FileProviderItem: NSObject {
   let reference: BlinkItemReference
   
@@ -54,9 +55,8 @@ extension FileProviderItem: NSFileProviderItem {
   }
 
   var parentItemIdentifier: NSFileProviderItemIdentifier {
-    reference.parentReference?.itemIdentifier ?? itemIdentifier
+    reference.parentReference
   }
-
 
   var filename: String {
     reference.filename
