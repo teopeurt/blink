@@ -29,13 +29,11 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-
 import Foundation
 import FileProvider
 import MobileCoreServices
 
 import BlinkFiles
-
 
 struct BlinkItemIdentifier {
   private let path: String
@@ -67,18 +65,46 @@ struct BlinkItemIdentifier {
   init(url: URL) {
     let manager = NSFileProviderManager.default
     let containerPath = manager.documentStorageURL.absoluteString
-    var path = url.absoluteString
-    path.removeFirst(containerPath.count + 1)
+    
     // file://<containerPath>/<encodedRootPath>/<encodedPath>/filename
+    var path = url.absoluteString
+    path.removeFirst(containerPath.count)
+    
+    // <encodedRootPath>/<encodedPath>/filename
+    
     let components = path.split(separator: "/")
+    let filename = components[2]
+    
+    let encodedPath = String(components[1])
+    let dataPath = Data(base64Encoded: encodedPath)
+    let decodedString = String(data: dataPath!, encoding: .utf8)!
+    
+    
+    self.path = decodedString
+    self.encodedRootPath = String(components[0])
+    
   }
   
   // <encodedRootPath>/<encodedPath>
+  // this gives you the local url with application root container prefix
+  // file:///Users/xxxx/Library/Developer/CoreSimulator/Devices/212A70E4-CE48-48C7-8A19-32357CE9B3BD/data/Containers/Shared/AppGroup/658A68A7-43BE-4C48-8586-C7029B0DCD9A/File%20Provider%20Storage/bG9jYWw6L3Vzcg==/L2xvY2Fs/local
+  // ??
   var url: URL {
     let data = self.path.data(using: .utf8)
     let encodedPath = data!.base64EncodedString()
+    
     // TODO This should probably be relative to the application root container
-    return URL(fileURLWithPath:"\(encodedRootPath)/\(encodedPath)/\(filename)")
+     return URL(fileURLWithPath:"\(encodedRootPath)/\(encodedPath)/\(filename)")
+  }
+  
+  var alternativeUrl: URL {
+    let data = self.path.data(using: .utf8)
+    let encodedPath = data!.base64EncodedString()
+    
+    let manager = NSFileProviderManager.default
+    let pathcomponents = "\(encodedRootPath)/\(encodedPath)/\(filename)"
+    let itemDirectory = manager.documentStorageURL.appendingPathComponent(pathcomponents)
+    return itemDirectory
   }
   
   var filename: String {

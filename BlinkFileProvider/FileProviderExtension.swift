@@ -83,6 +83,7 @@ class FileTranslatorPool {
   }
   
   static func store(reference: BlinkItemReference) {
+    print("storing File BlinkItemReference : \(reference.itemIdentifier.rawValue)")
     shared.references[reference.itemIdentifier.rawValue] = reference
   }
   
@@ -126,46 +127,89 @@ class FileProviderExtension: NSFileProviderExtension {
   }
   
   override func urlForItem(withPersistentIdentifier identifier: NSFileProviderItemIdentifier) -> URL? {
-    // resolve the given identifier to a file on disk
-    guard let item = try? item(for: identifier) else {
-      return nil
-    }
+    // TODO: option B: init using translator cache pool
+    // resolve the given identifier to a file (from translator)
+//    guard let item = try? item(for: identifier) else {
+//      return nil
+//    }
+        
+    // TODO: option B option A: init BlinkItemIdentifier
+    let blinkItemFromId = BlinkItemIdentifier(identifier)
     
-    // in this implementation, all paths are structured as <base storage directory>/<item identifier>/<item file name>
-    let manager = NSFileProviderManager.default
-    let perItemDirectory = manager.documentStorageURL.appendingPathComponent(identifier.rawValue, isDirectory: true)
-    
-    return perItemDirectory.appendingPathComponent(item.filename, isDirectory:false)
+    return  blinkItemFromId.alternativeUrl
   }
   
+  // url => file:///Users/xxxx/Library/Developer/CoreSimulator/Devices/212A70E4-CE48-48C7-8A19-32357CE9B3BD/data/Containers/Shared/AppGroup/658A68A7-43BE-4C48-8586-C7029B0DCD9A/File%20Provider%20Storage/bG9jYWw6L3Vzcg==/L2xvY2Fs/filename
+  
+  // https://developer.apple.com/documentation/fileprovider/nsfileproviderextension/1623479-persistentidentifierforitematurl?language=objc
+  //  define a static mapping between URLs and their persistent identifiers.
+  //  A document's identifier should remain constant over time; it should not change when the document is edited, moved, or rename
+  //  TODO: Always return nil if the _URL is not inside in the directory referred to by the NSFileProviderManager object's documentStorageURL_ property.
   override func persistentIdentifierForItem(at url: URL) -> NSFileProviderItemIdentifier? {
+    
+    let blinkItem = BlinkItemIdentifier(url: url)
+    
+    
     // resolve the given URL to a persistent identifier using a database
-    let pathComponents = url.pathComponents
+//    let pathComponents = url.pathComponents
     
     // exploit the fact that the path structure has been defined as
     // <base storage directory>/<item identifier>/<item file name> above
-    assert(pathComponents.count > 2)
+//    assert(pathComponents.count > 2)
+//    let identifier = pathComponents[pathComponents.count - 2]
     
-    return NSFileProviderItemIdentifier(pathComponents[pathComponents.count - 2])
+//    let identifier = url.deletingLastPathComponent().lastPathComponent
+    
+//    return NSFileProviderItemIdentifier(identifier)
+    
+    return blinkItem.itemIdentifier
   }
   
+
   override func providePlaceholder(at url: URL, completionHandler: @escaping (Error?) -> Void) {
+    //A Look Up the Document's File Provider Item
+    
+    //A.1. Get the document’s persistent identifier by calling persistentIdentifierForItemAtURL:, and pass in the value of the url parameter.
     guard let identifier = persistentIdentifierForItem(at: url) else {
       completionHandler(NSFileProviderError(.noSuchItem))
       return
     }
     
+    let localDirectory = url.deletingLastPathComponent()
+    print("identifier \(identifier)")
+    print("directory \(localDirectory)")
+    
     do {
+      
+//      try fileManager.createDirectory(
+//        at: localDirectory,
+//        withIntermediateDirectories: true,
+//        attributes: nil
+//      )
+    
+      //A.2. Call itemForIdentifier:error:, and pass in the persistent identifier. This method returns the file provider item for the document.
       let fileProviderItem = try item(for: identifier)
+      
+      // B. Write the Placeholder
+      
+      // B.1 Get the placeholder URL by calling placeholderURLForURL:, and pass in the value of the url parameter.
       let placeholderURL = NSFileProviderManager.placeholderURL(for: url)
+      
+      // B.2 Call writePlaceholderAtURL:withMetadata:error:, and pass in the placeholder URL and the file provider item.
       try NSFileProviderManager.writePlaceholder(at: placeholderURL,withMetadata: fileProviderItem)
+      
+      
       completionHandler(nil)
+      
+      
     } catch let error {
+      debugPrint(error)
       completionHandler(error)
     }
   }
   
   override func startProvidingItem(at url: URL, completionHandler: @escaping ((_ error: Error?) -> Void)) {
+    
     // Should ensure that the actual file is in the position returned by URLForItemWithIdentifier:, then call the completion handler
     
     /* TODO:
@@ -193,7 +237,16 @@ class FileProviderExtension: NSFileProviderExtension {
 //
     
     // 1 - From URL we get the identifier.
+    
+    guard let identifier = persistentIdentifierForItem(at: url) else {
+      completionHandler(NSFileProviderError(.noSuchItem))
+      return
+    }
+    
     // 2 - From the identifier, we get the translator, and we can walk to the remote file.
+    
+    let translator = FileTranslatorPool.translator(for: identifier.rawValue)
+    
     // 3 - On local, the path is already the URL, so we walk to the local file path to provide there.
     // 4 - Copy from one to the other, and call the completionHandler once done.
     
