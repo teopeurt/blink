@@ -36,8 +36,8 @@ import MobileCoreServices
 import BlinkFiles
 
 struct BlinkItemIdentifier {
-  private let path: String
-  private let encodedRootPath: String
+  let path: String
+  let encodedRootPath: String
   
   // <encodedRootPath>/path/to, name = filename. -> <encodedRootPath>/path/to/filename
   init(parentItemIdentifier: NSFileProviderItemIdentifier, filename: String) {

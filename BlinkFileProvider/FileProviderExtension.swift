@@ -60,19 +60,22 @@ class FileTranslatorPool {
     let components = rootPath.split(separator: ":")
     
     // TODO At least two components. Tweak for sftp
-    let p = BlinkFilesProtocol(rawValue: String(components[0]))
+    let remoteProtocol = BlinkFilesProtocol(rawValue: String(components[0]))
     let pathAtFiles: String
+    let host: String?
     if components.count == 2 {
       pathAtFiles = String(components[1])
+      host = nil
     } else {
       pathAtFiles = String(components[2])
+      host = String(components[1])
     }
     
     if let translator = shared.translators[encodedRootPath] {
       return translator
     }
     
-    switch p {
+    switch remoteProtocol {
     case .local:
       let translatorPub = Local().walkTo(pathAtFiles)
       shared.translators[encodedRootPath] = translatorPub
@@ -95,7 +98,8 @@ class FileTranslatorPool {
 class FileProviderExtension: NSFileProviderExtension {
   
   var fileManager = FileManager()
-  
+  var cancellableBag: Set<AnyCancellable> = []
+
   override init() {
     super.init()
   }
@@ -127,16 +131,8 @@ class FileProviderExtension: NSFileProviderExtension {
   }
   
   override func urlForItem(withPersistentIdentifier identifier: NSFileProviderItemIdentifier) -> URL? {
-    // TODO: option B: init using translator cache pool
-    // resolve the given identifier to a file (from translator)
-//    guard let item = try? item(for: identifier) else {
-//      return nil
-//    }
-        
-    // TODO: option B option A: init BlinkItemIdentifier
     let blinkItemFromId = BlinkItemIdentifier(identifier)
-    
-    return  blinkItemFromId.alternativeUrl
+    return blinkItemFromId.alternativeUrl
   }
   
   // url => file:///Users/xxxx/Library/Developer/CoreSimulator/Devices/212A70E4-CE48-48C7-8A19-32357CE9B3BD/data/Containers/Shared/AppGroup/658A68A7-43BE-4C48-8586-C7029B0DCD9A/File%20Provider%20Storage/bG9jYWw6L3Vzcg==/L2xvY2Fs/filename
@@ -165,7 +161,8 @@ class FileProviderExtension: NSFileProviderExtension {
     return blinkItem.itemIdentifier
   }
   
-
+  // importDocumentAtURL:toParentItemIdentifier:completionHandler:
+  
   override func providePlaceholder(at url: URL, completionHandler: @escaping (Error?) -> Void) {
     //A Look Up the Document's File Provider Item
     
@@ -181,11 +178,11 @@ class FileProviderExtension: NSFileProviderExtension {
     
     do {
       
-//      try fileManager.createDirectory(
-//        at: localDirectory,
-//        withIntermediateDirectories: true,
-//        attributes: nil
-//      )
+      try fileManager.createDirectory(
+        at: localDirectory,
+        withIntermediateDirectories: true,
+        attributes: nil
+      )
     
       //A.2. Call itemForIdentifier:error:, and pass in the persistent identifier. This method returns the file provider item for the document.
       let fileProviderItem = try item(for: identifier)
@@ -238,20 +235,28 @@ class FileProviderExtension: NSFileProviderExtension {
     
     // 1 - From URL we get the identifier.
     
-    guard let identifier = persistentIdentifierForItem(at: url) else {
-      completionHandler(NSFileProviderError(.noSuchItem))
-      return
-    }
+//    guard let identifier = persistentIdentifierForItem(at: url) else {
+//      completionHandler(NSFileProviderError(.noSuchItem))
+//      return
+//    }
+    let blinkIdentifier = BlinkItemIdentifier(url: url)
+    //let filename = url.lastPathComponent
     
-    // 2 - From the identifier, we get the translator, and we can walk to the remote file.
-    
-    let translator = FileTranslatorPool.translator(for: identifier.rawValue)
-    
+    // 2 - From the identifier, we get the translator, and we can walk to the remote file
+    let destTranslator = Local().cloneWalkTo(url.deletingLastPathComponent().path)
+    let srcTranslator = FileTranslatorPool.translator(for: blinkIdentifier.encodedRootPath)
+      
+    srcTranslator.flatMap { $0.cloneWalkTo(blinkIdentifier.path) }
+      .flatMap { fileTranslator in
+        return destTranslator.flatMap { $0.copy(from: [fileTranslator]) }
+      }.sink(receiveCompletion: { completion in
+        print(completion)
+        completionHandler(nil)
+      }, receiveValue: { _ in }).store(in: &cancellableBag)
     // 3 - On local, the path is already the URL, so we walk to the local file path to provide there.
     // 4 - Copy from one to the other, and call the completionHandler once done.
     
     // file://
-    completionHandler(NSError(domain: NSCocoaErrorDomain, code: NSFeatureUnsupportedError, userInfo:[:]))
   }
   
   override func itemChanged(at url: URL) {
