@@ -40,7 +40,7 @@ extension String: Error {}
 enum BlinkFilesProtocol: String {
   case ssh = "ssh"
   case local = "local"
-  case sftp = "sftp"
+  case sftp = "sftp" 
 }
 
 class FileTranslatorPool {
@@ -132,7 +132,9 @@ class FileProviderExtension: NSFileProviderExtension {
   
   override func urlForItem(withPersistentIdentifier identifier: NSFileProviderItemIdentifier) -> URL? {
     let blinkItemFromId = BlinkItemIdentifier(identifier)
-    return blinkItemFromId.alternativeUrl
+    debugPrint("blinkItemFromId.url")
+    debugPrint(blinkItemFromId.url)
+    return blinkItemFromId.url
   }
   
   // url => file:///Users/xxxx/Library/Developer/CoreSimulator/Devices/212A70E4-CE48-48C7-8A19-32357CE9B3BD/data/Containers/Shared/AppGroup/658A68A7-43BE-4C48-8586-C7029B0DCD9A/File%20Provider%20Storage/bG9jYWw6L3Vzcg==/L2xvY2Fs/filename
@@ -142,59 +144,37 @@ class FileProviderExtension: NSFileProviderExtension {
   //  A document's identifier should remain constant over time; it should not change when the document is edited, moved, or rename
   //  TODO: Always return nil if the _URL is not inside in the directory referred to by the NSFileProviderManager object's documentStorageURL_ property.
   override func persistentIdentifierForItem(at url: URL) -> NSFileProviderItemIdentifier? {
-    
     let blinkItem = BlinkItemIdentifier(url: url)
-    
-    
-    // resolve the given URL to a persistent identifier using a database
-//    let pathComponents = url.pathComponents
-    
-    // exploit the fact that the path structure has been defined as
-    // <base storage directory>/<item identifier>/<item file name> above
-//    assert(pathComponents.count > 2)
-//    let identifier = pathComponents[pathComponents.count - 2]
-    
-//    let identifier = url.deletingLastPathComponent().lastPathComponent
-    
-//    return NSFileProviderItemIdentifier(identifier)
-    
     return blinkItem.itemIdentifier
   }
   
   // importDocumentAtURL:toParentItemIdentifier:completionHandler:
   
   override func providePlaceholder(at url: URL, completionHandler: @escaping (Error?) -> Void) {
-    //A Look Up the Document's File Provider Item
     
+    print("providePlaceholder at \(url)")
+
     //A.1. Get the document’s persistent identifier by calling persistentIdentifierForItemAtURL:, and pass in the value of the url parameter.
+    makeLocalDirectoryFrom(url: url)
+
+    //A Look Up the Document's File Provider Item
     guard let identifier = persistentIdentifierForItem(at: url) else {
       completionHandler(NSFileProviderError(.noSuchItem))
       return
     }
-    
-    let localDirectory = url.deletingLastPathComponent()
     print("identifier \(identifier)")
-    print("directory \(localDirectory)")
-    
+
     do {
       
-      try fileManager.createDirectory(
-        at: localDirectory,
-        withIntermediateDirectories: true,
-        attributes: nil
-      )
-    
       //A.2. Call itemForIdentifier:error:, and pass in the persistent identifier. This method returns the file provider item for the document.
       let fileProviderItem = try item(for: identifier)
-      
+
       // B. Write the Placeholder
-      
       // B.1 Get the placeholder URL by calling placeholderURLForURL:, and pass in the value of the url parameter.
       let placeholderURL = NSFileProviderManager.placeholderURL(for: url)
-      
+
       // B.2 Call writePlaceholderAtURL:withMetadata:error:, and pass in the placeholder URL and the file provider item.
       try NSFileProviderManager.writePlaceholder(at: placeholderURL,withMetadata: fileProviderItem)
-      
       
       completionHandler(nil)
       
@@ -204,8 +184,27 @@ class FileProviderExtension: NSFileProviderExtension {
       completionHandler(error)
     }
   }
-  
+
+  private func makeLocalDirectoryFrom(url: URL) {
+    let localDirectory = url.deletingLastPathComponent()
+    print("directory \(localDirectory)")
+
+    do {
+
+      try fileManager.createDirectory(
+        at: localDirectory,
+        withIntermediateDirectories: true,
+        attributes: nil
+      )
+
+    } catch let error {
+      debugPrint(error)
+    }
+  }
+
   override func startProvidingItem(at url: URL, completionHandler: @escaping ((_ error: Error?) -> Void)) {
+    
+    print("startProvidingItem  at \(url)")
     
     // Should ensure that the actual file is in the position returned by URLForItemWithIdentifier:, then call the completion handler
     
@@ -242,10 +241,15 @@ class FileProviderExtension: NSFileProviderExtension {
     let blinkIdentifier = BlinkItemIdentifier(url: url)
     //let filename = url.lastPathComponent
     
-    // 2 - From the identifier, we get the translator, and we can walk to the remote file
+    // SRC                --> DEST
+    // remote             --> local
+    // FileTranslatorPool --> Local()
+    
+    // local
     let destTranslator = Local().cloneWalkTo(url.deletingLastPathComponent().path)
+    
+    // 2 remote - From the identifier, we get the translator, and we can walk to the remote file
     let srcTranslator = FileTranslatorPool.translator(for: blinkIdentifier.encodedRootPath)
-      
     srcTranslator.flatMap { $0.cloneWalkTo(blinkIdentifier.path) }
       .flatMap { fileTranslator in
         return destTranslator.flatMap { $0.copy(from: [fileTranslator]) }
@@ -260,6 +264,8 @@ class FileProviderExtension: NSFileProviderExtension {
   }
   
   override func itemChanged(at url: URL) {
+    print("itemChanged ITEM at \(url)")
+
     // Called at some point after the file has changed; the provider may then trigger an upload
     
     /* TODO:
@@ -271,6 +277,7 @@ class FileProviderExtension: NSFileProviderExtension {
   }
   
   override func stopProvidingItem(at url: URL) {
+    print("stopProvidingItem ITEM at \(url)")
     // Called after the last claim to the file has been released. At this point, it is safe for the file provider to remove the content file.
     // Care should be taken that the corresponding placeholder file stays behind after the content file has been deleted.
     
@@ -294,6 +301,113 @@ class FileProviderExtension: NSFileProviderExtension {
     }
   }
   
+  override func importDocument(at fileURL: URL, toParentItemIdentifier parentItemIdentifier: NSFileProviderItemIdentifier, completionHandler: @escaping (NSFileProviderItem?, Error?) -> Void) {
+    
+    var error: NSError?
+    print("importDocument ITEM at \(fileURL)")
+
+    print("fileURL")
+    print(fileURL)
+    
+    print("parentItemIdentifier")
+    print(parentItemIdentifier)
+    
+    let filename = fileURL.lastPathComponent
+    let blinkIdentifier = BlinkItemIdentifier(parentItemIdentifier: parentItemIdentifier, filename: filename)
+    
+    let encodedRootPath = blinkIdentifier.encodedRootPath
+    let remotepathWithFileName = blinkIdentifier.path
+
+        
+    _ = fileURL.startAccessingSecurityScopedResource()
+    
+    // TODO: Guard against directories being copied
+
+    NSFileCoordinator()
+      .coordinate(readingItemAt: fileURL, options: .withoutChanges, error: &error) { (url) in
+        
+        // OPTION 1. create local copy of remote src
+//         let manager = NSFileProviderManager.default
+//         let pathcomponents = remotepathWithFileName
+//         let itemUrl = manager.documentStorageURL.appendingPathComponent(pathcomponents)
+        let itemUrl = blinkIdentifier.url
+        
+        // Do I need to do this - we actually don't know if the corresponding local file exists, but this implicitly creates the file
+        
+        // OPTION 2. Use BlinkItemIdentifier with url..
+        // will error due to url not in Blink URL format
+//        let item = BlinkItemIdentifier(url: url)
+//        let itemUrl = item.url
+
+        // Option 1.I
+//        providePlaceholder(at: itemUrl) { error in
+//          // do something
+//        }
+        
+        // Option 1.II
+        do {
+          try fileManager.createDirectory(
+            at: itemUrl,
+            withIntermediateDirectories: true,
+            attributes: nil
+          )
+
+        } catch let error {
+          debugPrint(error)
+        }
+        
+        // copy the item from Unknown Remote to Blink_Local()
+        _ = copyFile(url.path, toPath: itemUrl.path)
+        
+        // SRC      --> DEST
+        // local    --> remote
+        // Local()  --> FileTranslatorPool()
+        
+        // copy item from Blink_Local() to Blink Remote
+        print("encodedRootPath \(encodedRootPath)")
+        print("remotepath \(remotepathWithFileName)")
+        
+        let srcTranslator = Local().cloneWalkTo(itemUrl.deletingLastPathComponent().path)
+        
+        let destTranslator = FileTranslatorPool.translator(for: blinkIdentifier.encodedRootPath)
+        destTranslator.flatMap { $0.cloneWalkTo(remotepathWithFileName) }
+          .flatMap { fileTranslator in
+            return srcTranslator.flatMap { $0.copy(from: [fileTranslator]) }
+          }.sink(
+            receiveCompletion: { completion in
+    //          fileURL.stopAccessingSecurityScopedResource()
+
+                print("completion ")
+                print(completion)
+              
+              if case let .failure(error) = completion {
+                print("Copyfailed. \(error)")
+                completionHandler(nil, error)
+              }
+                // create NSFileProviderItem!
+              completionHandler(nil, nil)},
+            receiveValue: { _ in
+                // progress..
+              
+            })
+          .store(in: &cancellableBag)
+        // 3 - On local, the path is already the URL, so we walk to the local file path to provide there.
+        
+        // 4 - Copy from one to the other, and call the completionHandler once done.
+        
+    }
+    
+    fileURL.stopAccessingSecurityScopedResource()
+    
+    // 1 - From NSFileProviderItemIdentifier we get the parent item and filename ..
+   
+
+
+    
+  }
+  
+  
+  
   // MARK: - Actions
   
   /* TODO: implement the actions for items here
@@ -315,11 +429,73 @@ class FileProviderExtension: NSFileProviderExtension {
     }
 
     if (containerItemIdentifier != NSFileProviderItemIdentifier.workingSet) {
-      return FileProviderEnumerator(enumeratedItemIdentifier: containerItemIdentifier, domain: domain)
+      
+      let enumerator = FileProviderEnumerator(enumeratedItemIdentifier: containerItemIdentifier, domain: domain)
+      
+      return enumerator
     } else {
       // We may want to do an empty FileProviderEnumerator, because otherwise it will try to request it again and again.
       throw NSError(domain: NSCocoaErrorDomain, code: NSFeatureUnsupportedError, userInfo:[:])
     }
+  }
+  
+  func copyFile(_ atPath: String, toPath: String) -> Error? {
+      
+      var errorResult: Error?
+      
+      if !fileManager.fileExists(atPath: atPath) { return NSError(domain: NSCocoaErrorDomain, code: NSFileNoSuchFileError, userInfo:[:]) }
+      
+      do {
+          try fileManager.removeItem(atPath: toPath)
+      } catch let error {
+          print("error: \(error)")
+      }
+      do {
+          try fileManager.copyItem(atPath: atPath, toPath: toPath)
+      } catch let error {
+          errorResult = error
+      }
+      
+      return errorResult
+  }
+  
+  func moveFile(_ atPath: String, toPath: String) -> Error? {
+      
+      var errorResult: Error?
+      
+      if atPath == toPath { return nil }
+      if !fileManager.fileExists(atPath: atPath) { return NSError(domain: NSCocoaErrorDomain, code: NSFileNoSuchFileError, userInfo:[:]) }
+      
+      do {
+          try fileManager.removeItem(atPath: toPath)
+      } catch let error {
+          print("error: \(error)")
+      }
+      do {
+          try fileManager.moveItem(atPath: atPath, toPath: toPath)
+      } catch let error {
+          errorResult = error
+      }
+      
+      return errorResult
+  }
+  
+  
+  func deleteFile(_ atPath: String) -> Error? {
+      
+      var errorResult: Error?
+      
+      do {
+          try fileManager.removeItem(atPath: atPath)
+      } catch let error {
+          errorResult = error
+      }
+      
+      return errorResult
+  }
+  
+  func fileExists(atPath: String) -> Bool {
+      return fileManager.fileExists(atPath: atPath)
   }
   
 }
