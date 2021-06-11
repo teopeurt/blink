@@ -137,6 +137,16 @@ class FileProviderExtension: NSFileProviderExtension {
     return blinkItemFromId.url
   }
   
+  
+  // MARK: - Actions
+  
+  /* TODO: implement the actions for items here
+   each of the actions follows the same pattern:
+   - make a note of the change in the local model
+   - schedule a server request as a background task to inform the server of the change
+   - call the completion block with the modified item in its post-modification state
+   */
+  
   // url => file:///Users/xxxx/Library/Developer/CoreSimulator/Devices/212A70E4-CE48-48C7-8A19-32357CE9B3BD/data/Containers/Shared/AppGroup/658A68A7-43BE-4C48-8586-C7029B0DCD9A/File%20Provider%20Storage/bG9jYWw6L3Vzcg==/L2xvY2Fs/filename
   
   // https://developer.apple.com/documentation/fileprovider/nsfileproviderextension/1623479-persistentidentifierforitematurl?language=objc
@@ -401,21 +411,14 @@ class FileProviderExtension: NSFileProviderExtension {
     
     // 1 - From NSFileProviderItemIdentifier we get the parent item and filename ..
    
-
-
-    
   }
   
-  
-  
-  // MARK: - Actions
-  
-  /* TODO: implement the actions for items here
-   each of the actions follows the same pattern:
-   - make a note of the change in the local model
-   - schedule a server request as a background task to inform the server of the change
-   - call the completion block with the modified item in its post-modification state
-   */
+  override func createDirectory(withName directoryName: String,
+  inParentItemIdentifier parentItemIdentifier: NSFileProviderItemIdentifier,
+  completionHandler: @escaping (NSFileProviderItem?, Error?) -> Void) {
+    
+    
+  }
   
   // MARK: - Enumeration
   
