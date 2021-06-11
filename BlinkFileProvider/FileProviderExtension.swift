@@ -137,7 +137,6 @@ class FileProviderExtension: NSFileProviderExtension {
     return blinkItemFromId.url
   }
   
-  
   // MARK: - Actions
   
   /* TODO: implement the actions for items here
@@ -157,9 +156,7 @@ class FileProviderExtension: NSFileProviderExtension {
     let blinkItem = BlinkItemIdentifier(url: url)
     return blinkItem.itemIdentifier
   }
-  
-  // importDocumentAtURL:toParentItemIdentifier:completionHandler:
-  
+    
   override func providePlaceholder(at url: URL, completionHandler: @escaping (Error?) -> Void) {
     
     print("providePlaceholder at \(url)")
@@ -192,23 +189,6 @@ class FileProviderExtension: NSFileProviderExtension {
     } catch let error {
       debugPrint(error)
       completionHandler(error)
-    }
-  }
-
-  private func makeLocalDirectoryFrom(url: URL) {
-    let localDirectory = url.deletingLastPathComponent()
-    print("directory \(localDirectory)")
-
-    do {
-
-      try fileManager.createDirectory(
-        at: localDirectory,
-        withIntermediateDirectories: true,
-        attributes: nil
-      )
-
-    } catch let error {
-      debugPrint(error)
     }
   }
 
@@ -336,10 +316,13 @@ class FileProviderExtension: NSFileProviderExtension {
     NSFileCoordinator()
       .coordinate(readingItemAt: fileURL, options: .withoutChanges, error: &error) { (url) in
         
-        // OPTION 1. create local copy of remote src
-//         let manager = NSFileProviderManager.default
-//         let pathcomponents = remotepathWithFileName
-//         let itemUrl = manager.documentStorageURL.appendingPathComponent(pathcomponents)
+        // OPTION 1.a create local copy of remote src
+        // let manager = NSFileProviderManager.default
+        // let pathcomponents = remotepathWithFileName
+        // let itemUrl = manager.documentStorageURL.appendingPathComponent(pathcomponents)
+        
+        
+        // OPTION 1.b create local copy of remote src
         let itemUrl = blinkIdentifier.url
         
         // Do I need to do this - we actually don't know if the corresponding local file exists, but this implicitly creates the file
@@ -384,17 +367,17 @@ class FileProviderExtension: NSFileProviderExtension {
           .flatMap { fileTranslator in
             return srcTranslator.flatMap { $0.copy(from: [fileTranslator]) }
           }.sink(
-            receiveCompletion: { completion in
-    //          fileURL.stopAccessingSecurityScopedResource()
-
+            receiveCompletion: { attributes in
                 print("completion ")
-                print(completion)
+                print(attributes)
               
-              if case let .failure(error) = completion {
+              if case let .failure(error) = attributes {
                 print("Copyfailed. \(error)")
                 completionHandler(nil, error)
               }
-                // create NSFileProviderItem!
+              
+         
+              // create NSFileProviderItem - translator does not return a BlinkAttribute?, wrong API?
               completionHandler(nil, nil)},
             receiveValue: { _ in
                 // progress..
@@ -417,7 +400,7 @@ class FileProviderExtension: NSFileProviderExtension {
   inParentItemIdentifier parentItemIdentifier: NSFileProviderItemIdentifier,
   completionHandler: @escaping (NSFileProviderItem?, Error?) -> Void) {
     
-    
+    // TODO:
   }
   
   // MARK: - Enumeration
@@ -432,16 +415,33 @@ class FileProviderExtension: NSFileProviderExtension {
     }
 
     if (containerItemIdentifier != NSFileProviderItemIdentifier.workingSet) {
-      
-      let enumerator = FileProviderEnumerator(enumeratedItemIdentifier: containerItemIdentifier, domain: domain)
-      
-      return enumerator
+      return FileProviderEnumerator(enumeratedItemIdentifier: containerItemIdentifier, domain: domain)
+
     } else {
       // We may want to do an empty FileProviderEnumerator, because otherwise it will try to request it again and again.
       throw NSError(domain: NSCocoaErrorDomain, code: NSFeatureUnsupportedError, userInfo:[:])
     }
   }
   
+  // MARK: - Private
+  
+  private func makeLocalDirectoryFrom(url: URL) {
+    let localDirectory = url.deletingLastPathComponent()
+    print("directory \(localDirectory)")
+
+    do {
+
+      try fileManager.createDirectory(
+        at: localDirectory,
+        withIntermediateDirectories: true,
+        attributes: nil
+      )
+
+    } catch let error {
+      debugPrint(error)
+    }
+  }
+
   func copyFile(_ atPath: String, toPath: String) -> Error? {
       
       var errorResult: Error?
