@@ -68,14 +68,69 @@ extension FileProviderItem: NSFileProviderItem {
 
   var capabilities: NSFileProviderItemCapabilities {
     if reference.isDirectory {
-      return [.allowsReading, .allowsContentEnumerating]
-    } else {
-      return [.allowsReading]
-    }
+      return [ .allowsAddingSubItems, .allowsContentEnumerating, .allowsReading, .allowsDeleting, .allowsRenaming ]
+  } else {
+      return [ .allowsWriting, .allowsReading, .allowsDeleting, .allowsRenaming, .allowsReparenting ]
+  }
   }
 
   var documentSize: NSNumber? {
     nil
   }
 
+//  var contentType: UTType {
+//    fatalError("contentType has not been implemented")
+//  }
+  
+//  var childItemCount: NSNumber? {
+//    fatalError("childItemCount has not been implemented")
+//  }
+//  var creationDate: Date? {
+//    fatalError("creationDate has not been implemented")
+//  }
+//  var contentModificationDate: Date? {
+//    fatalError("contentModificationDate has not been implemented")
+//  }
+//  var lastUsedDate: Date? {
+//    fatalError("lastUsedDate has not been implemented")
+//  }
+//  var tagData: Data? {
+//    fatalError("tagData has not been implemented")
+//  }
+//  var favoriteRank: NSNumber? {
+//    fatalError("favoriteRank has not been implemented")
+//  }
+//  var isTrashed: Bool {
+//    fatalError("isTrashed has not been implemented")
+//  }
+//  var isUploaded: Bool {
+//    fatalError("isUploaded has not been implemented")
+//  }
+//  var isUploading: Bool {
+//    fatalError("isUploading has not been implemented")
+//  }
+//  var uploadingError: Error? {
+//    fatalError("uploadingError has not been implemented")
+//  }
+//  var isDownloaded: Bool {
+//    fatalError("isDownloaded has not been implemented")
+//  }
+//  var isDownloading: Bool {
+//    fatalError("isDownloading has not been implemented")
+//  }
+//  var downloadingError: Error? {
+//    fatalError("downloadingError has not been implemented")
+//  }
+//  var isMostRecentVersionDownloaded: Bool {
+//    fatalError("isMostRecentVersionDownloaded has not been implemented")
+//  }
+//  var ownerNameComponents: PersonNameComponents? {
+//    fatalError("ownerNameComponents has not been implemented")
+//  }
+//  var versionIdentifier: Data? {
+//    fatalError("versionIdentifier has not been implemented")
+//  }
+//  var userInfo: [AnyHashable: Any]? {
+//    fatalError("userInfo has not been implemented")
+//  }
 }
