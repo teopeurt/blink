@@ -190,4 +190,31 @@ struct BlinkItemReference {
   var parentReference: NSFileProviderItemIdentifier {
     return identifier.parentReference
   }
+  
+  var creationDate: Date? {
+    
+    guard let date = attributes[.creationDate] as? Date else {
+      return nil
+    }
+    
+    return date
+  }
+  
+  var contentModificationDate: Date? {
+    guard let date  = attributes[.modificationDate] as? Date else {
+      return nil
+    }
+    
+    return date
+  }
+  
+  var documentSize: NSNumber? {
+    guard let size = attributes[.size] as? NSNumber else {
+      return nil
+    }
+    
+    return size
+  }
+  
+  
 }

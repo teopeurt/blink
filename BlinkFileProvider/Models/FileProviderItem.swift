@@ -67,30 +67,25 @@ extension FileProviderItem: NSFileProviderItem {
   }
 
   var capabilities: NSFileProviderItemCapabilities {
-    if reference.isDirectory {
-      return [ .allowsAddingSubItems, .allowsContentEnumerating, .allowsReading, .allowsDeleting, .allowsRenaming ]
-  } else {
-      return [ .allowsWriting, .allowsReading, .allowsDeleting, .allowsRenaming, .allowsReparenting ]
+      if reference.isDirectory {
+        return [ .allowsAddingSubItems, .allowsContentEnumerating, .allowsReading, .allowsDeleting, .allowsRenaming ]
+    } else {
+        return [ .allowsWriting, .allowsReading, .allowsDeleting, .allowsRenaming, .allowsReparenting ]
+    }
   }
-  }
-
-  var documentSize: NSNumber? {
-    nil
-  }
-
-//  var contentType: UTType {
-//    fatalError("contentType has not been implemented")
-//  }
   
-//  var childItemCount: NSNumber? {
-//    fatalError("childItemCount has not been implemented")
-//  }
-//  var creationDate: Date? {
-//    fatalError("creationDate has not been implemented")
-//  }
-//  var contentModificationDate: Date? {
-//    fatalError("contentModificationDate has not been implemented")
-//  }
+  var childItemCount: NSNumber? {
+      return nil
+  }
+  
+  var creationDate: Date? {
+    reference.creationDate
+  }
+  
+  var contentModificationDate: Date? {
+    reference.contentModificationDate
+  }
+  
 //  var lastUsedDate: Date? {
 //    fatalError("lastUsedDate has not been implemented")
 //  }
@@ -100,9 +95,11 @@ extension FileProviderItem: NSFileProviderItem {
 //  var favoriteRank: NSNumber? {
 //    fatalError("favoriteRank has not been implemented")
 //  }
-//  var isTrashed: Bool {
-//    fatalError("isTrashed has not been implemented")
-//  }
+  
+  var isTrashed: Bool {
+      return false
+  }
+  
 //  var isUploaded: Bool {
 //    fatalError("isUploaded has not been implemented")
 //  }
@@ -121,9 +118,15 @@ extension FileProviderItem: NSFileProviderItem {
 //  var downloadingError: Error? {
 //    fatalError("downloadingError has not been implemented")
 //  }
-//  var isMostRecentVersionDownloaded: Bool {
-//    fatalError("isMostRecentVersionDownloaded has not been implemented")
-//  }
+  
+  var isMostRecentVersionDownloaded: Bool {
+      return true
+  }
+  
+  var documentSize: NSNumber? {
+    return reference.documentSize
+  }
+  
 //  var ownerNameComponents: PersonNameComponents? {
 //    fatalError("ownerNameComponents has not been implemented")
 //  }
