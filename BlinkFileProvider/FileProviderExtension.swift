@@ -55,7 +55,7 @@ class FileTranslatorPool {
           let rootPath = String(data: rootData, encoding: .utf8) else {
       return Fail(error: "Wrong encoded identifier for Translator").eraseToAnyPublisher()
     }
-    
+
     // rootPath: ssh:host:root_folder
     let components = rootPath.split(separator: ":")
     
@@ -108,26 +108,23 @@ class FileProviderExtension: NSFileProviderExtension {
   override func item(for identifier: NSFileProviderItemIdentifier) throws -> NSFileProviderItem {
     print("ITEM \(identifier.rawValue) REQUESTED")
     
-    //  TODO At least two components
-//    let p = BlinkFilesProtocol(rawValue: String(components[0]))
-//    let pathAtFiles: String
-//    if components.count == 2 {
-//      pathAtFiles = String(components[1])
-//    } else {
-//      pathAtFiles = String(components[2])
-//    }
+    var queryableIdentifier: NSFileProviderItemIdentifier!
     
-    // TODO We have no attributes here, but they are necessary. Metadata will have to be
-    // stored somewhere else too.
-    guard let reference = FileTranslatorPool.reference(identifier: identifier) else {
-      throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: identifier)
+    if identifier == .rootContainer {
+      queryableIdentifier = NSFileProviderItemIdentifier("bG9jYWw6Lw==/")
+
+    } else {
+      queryableIdentifier = identifier
+    }
+    
+    guard let reference = FileTranslatorPool.reference(identifier: queryableIdentifier) else {
+      print("ITEM \(queryableIdentifier.rawValue) REQUESTED with ERROR")
+
+      throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: queryableIdentifier)
     }
     
     return FileProviderItem(reference: reference)
-//    guard let reference = BlinkItemReference(itemIdentifier: identifier, rootPath: pathAtFiles) else {      throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: identifier)
-//    }
-//
-//    return FileProviderItem(reference: reference)
+
   }
   
   override func urlForItem(withPersistentIdentifier identifier: NSFileProviderItemIdentifier) -> URL? {
@@ -291,6 +288,7 @@ class FileProviderExtension: NSFileProviderExtension {
     }
   }
   
+  // https://discussions.apple.com/thread/251188856
   override func importDocument(at fileURL: URL, toParentItemIdentifier parentItemIdentifier: NSFileProviderItemIdentifier, completionHandler: @escaping (NSFileProviderItem?, Error?) -> Void) {
     
     var error: NSError?
@@ -307,11 +305,11 @@ class FileProviderExtension: NSFileProviderExtension {
     
     let encodedRootPath = blinkIdentifier.encodedRootPath
     let remotepathWithFileName = blinkIdentifier.path
+    let remotePath = (remotepathWithFileName as NSString).deletingLastPathComponent
 
-        
     _ = fileURL.startAccessingSecurityScopedResource()
     
-    // TODO: Guard against directories being copied
+    // TODO: Guard against directories being copied?
 
     NSFileCoordinator()
       .coordinate(readingItemAt: fileURL, options: .withoutChanges, error: &error) { (url) in
@@ -347,10 +345,12 @@ class FileProviderExtension: NSFileProviderExtension {
 
         } catch let error {
           debugPrint(error)
+//          completionHandler(nil, error)
+//          return
         }
         
-        // copy the item from Unknown Remote to Blink_Local()
-        _ = copyFile(url.path, toPath: itemUrl.path)
+        // move the item from Unknown Remote to Blink_Local()
+        _ = moveFile(url.path, toPath: itemUrl.path)
         
         // SRC      --> DEST
         // local    --> remote
@@ -362,28 +362,50 @@ class FileProviderExtension: NSFileProviderExtension {
         
         let srcTranslator = Local().cloneWalkTo(itemUrl.deletingLastPathComponent().path)
         
+        var attributes: FileAttributes!
+        
+        do {
+          attributes = try fileManager.attributesOfItem(atPath: itemUrl.path)
+          attributes[.name] = filename
+        } catch let error {
+          completionHandler(nil, error)
+          return
+        }
+        
+        let blinkRef = BlinkItemReference(parentItemIdentifier: parentItemIdentifier, attributes: attributes)
+        
+    
         let destTranslator = FileTranslatorPool.translator(for: blinkIdentifier.encodedRootPath)
-        destTranslator.flatMap { $0.cloneWalkTo(remotepathWithFileName) }
+        destTranslator.flatMap { $0.cloneWalkTo(remotePath) }
           .flatMap { fileTranslator in
+            
             return srcTranslator.flatMap { $0.copy(from: [fileTranslator]) }
           }.sink(
-            receiveCompletion: { attributes in
-                print("completion ")
-                print(attributes)
-              
-              if case let .failure(error) = attributes {
+            receiveCompletion: { completionAttribute in
+                print("completionAttribute \(completionAttribute) ")
+                
+              if case let .failure(error) = completionAttribute {
                 print("Copyfailed. \(error)")
-                completionHandler(nil, error)
-              }
-              
          
-              // create NSFileProviderItem - translator does not return a BlinkAttribute?, wrong API?
-              completionHandler(nil, nil)},
-            receiveValue: { _ in
-                // progress..
+                completionHandler(nil, error)
+                return
+              }
+          
+              // create NSFileProviderItem - translator does not return a BlinkAttribute
+              
+             print("DONE: translator does not return a BlinkAttribute ")
+              let item = FileProviderItem(reference: blinkRef)
+              completionHandler(item, nil)
+              
+            }, receiveValue: { value in
+                // progress...
+              print("@@@ receiving Value in value \(value)")
               
             })
           .store(in: &cancellableBag)
+        
+      
+      
         // 3 - On local, the path is already the URL, so we walk to the local file path to provide there.
         
         // 4 - Copy from one to the other, and call the completionHandler once done.
@@ -401,6 +423,10 @@ class FileProviderExtension: NSFileProviderExtension {
   completionHandler: @escaping (NSFileProviderItem?, Error?) -> Void) {
     
     // TODO:
+    
+    // 1. Check for collisions
+    
+    // 2. Create a directory (locally?)
   }
   
   // MARK: - Enumeration
@@ -467,17 +493,31 @@ class FileProviderExtension: NSFileProviderExtension {
       var errorResult: Error?
       
       if atPath == toPath { return nil }
-      if !fileManager.fileExists(atPath: atPath) { return NSError(domain: NSCocoaErrorDomain, code: NSFileNoSuchFileError, userInfo:[:]) }
-      
-      do {
-          try fileManager.removeItem(atPath: toPath)
-      } catch let error {
-          print("error: \(error)")
+    
+      if fileManager.fileExists(atPath: atPath) {
+        //return NSError(domain: NSCocoaErrorDomain, code: NSFileNoSuchFileError, userInfo:[:])
+        
+        do {
+            try fileManager.removeItem(atPath: toPath)
+        } catch let error {
+            print("error: \(error)")
+          return error
+        }
+
       }
+      
+//      do {
+//          try fileManager.removeItem(atPath: toPath)
+//      } catch let error {
+//          print("error: \(error)")
+//        return error
+//      }
+    
       do {
           try fileManager.moveItem(atPath: atPath, toPath: toPath)
       } catch let error {
           errorResult = error
+        return error
       }
       
       return errorResult

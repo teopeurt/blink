@@ -38,7 +38,9 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
   let identifier: NSFileProviderItemIdentifier
   let translator: AnyPublisher<Translator, Error>
   var cancellableBag: Set<AnyCancellable> = []
+  var currentAnchor: UInt64 = 0
   //var translatorPub: AnyPublisher<Translator, Error>
+//  var rootIdentifier: String
 
   init(enumeratedItemIdentifier: NSFileProviderItemIdentifier,
        domain: NSFileProviderDomain) {
@@ -76,7 +78,7 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
   func invalidate() {
     // TODO: perform invalidation of server connection if necessary
   }
-  
+
   func enumerateItems(for observer: NSFileProviderEnumerationObserver, startingAt page: NSFileProviderPage) {
     /* TODO:
      - inspect the page to determine whether this is an initial or a follow-up request
@@ -90,6 +92,28 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
      - inform the observer about the items returned by the server (possibly multiple times)
      - inform the observer that you are finished with this page
      */
+    
+    // // NSFileProviderItemIdentifier(_rawValue: bG9jYWw6Lw==)
+    print("@@@ identifier path is  \(self.identifier)")
+    
+    translator.print("Translator").flatMap { $0.stat()
+    }.sink(receiveCompletion: { completion in
+      switch completion {
+      case .failure(let error):
+        print("ERROR \(error.localizedDescription)")
+      default:
+        break
+      }
+    }, receiveValue: { blinkAttr in
+      
+        let ref = BlinkItemReference(parentItemIdentifier: self.identifier,
+                                     attributes: blinkAttr)
+        // Store the reference in the internal DB for later usage.
+        FileTranslatorPool.store(reference: ref)
+        let item = FileProviderItem(reference: ref)
+      
+    }).store(in: &cancellableBag)
+
     
     translator.print("Translator").flatMap { $0.directoryFilesAndAttributes()
     }.sink(receiveCompletion: { completion in
@@ -112,16 +136,49 @@ class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
     }).store(in: &cancellableBag)
   }
 
-  func enumerateChanges(for observer: NSFileProviderChangeObserver, from anchor: NSFileProviderSyncAnchor) {
-    /* TODO:
-     - query the server for updates since the passed-in sync anchor
-     
-     If this is an enumerator for the active set:
-     - note the changes in your local database
-     
-     - inform the observer about item deletions and updates (modifications + insertions)
-     - inform the observer when you have finished enumerating up to a subsequent sync anchor
-     */
-  }
+//  func enumerateChanges(for observer: NSFileProviderChangeObserver, from anchor: NSFileProviderSyncAnchor) {
+//    /* TODO:
+//     - query the server for updates since the passed-in sync anchor
+//
+//     If this is an enumerator for the active set:
+//     - note the changes in your local database
+//
+//     - inform the observer about item deletions and updates (modifications + insertions)
+//     - inform the observer when you have finished enumerating up to a subsequent sync anchor
+//     */
+//    let data = "\(currentAnchor)".data(using: .utf8)
+//    observer.finishEnumeratingChanges(upTo: NSFileProviderSyncAnchor(data!), moreComing: false)
+//
+//  }
   
+  
+  /**
+   Request the current sync anchor.
+  
+   To keep an enumeration updated, the system will typically
+   - request the current sync anchor (1)
+   - enumerate items starting with an initial page
+   - continue enumerating pages, each time from the page returned in the previous
+     enumeration, until finishEnumeratingUpToPage: is called with nextPage set to
+     nil
+   - enumerate changes starting from the sync anchor returned in (1)
+   - continue enumerating changes, each time from the sync anchor returned in the
+     previous enumeration, until finishEnumeratingChangesUpToSyncAnchor: is called
+     with moreComing:NO
+  
+   This method will be called again if you signal that there are more changes with
+   -[NSFileProviderManager signalEnumeratorForContainerItemIdentifier:
+   completionHandler:] and again, the system will enumerate changes until
+   finishEnumeratingChangesUpToSyncAnchor: is called with moreComing:NO.
+  
+   NOTE that the change-based observation methods are marked optional for historical
+   reasons, but are really required. System performance will be severely degraded if
+   they are not implemented.
+  */
+//  func currentSyncAnchor(completionHandler: @escaping (NSFileProviderSyncAnchor?) -> Void) {
+//    
+//    // todo
+//    let data = "\(currentAnchor)".data(using: .utf8)
+//    completionHandler(NSFileProviderSyncAnchor(data!))
+//  } 
 }
